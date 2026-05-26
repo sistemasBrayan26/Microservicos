@@ -1,6 +1,5 @@
 package br.com.brayanalves.pedidos.notificacao.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.FanoutExchange;
@@ -8,15 +7,16 @@ import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
-import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 @Configuration
 public class RabbitmqConfig {
@@ -27,19 +27,44 @@ public class RabbitmqConfig {
     @Value("${rabbitmq.queue.name}")
     private String queueName;
 
+    @Value("${rabbitmq.exchange.dlx.name}")
+    private String exchangeDlxName;
+
+    @Value("${rabbitmq.queue.dlq.name}")
+    private String queueDlqName;
+
     @Bean
-    public FanoutExchange pedidoExchange() {
+    public FanoutExchange notificacaoExchange() {
         return new FanoutExchange(exchangeName);
     }
 
     @Bean
+    public FanoutExchange pedidoDlxExchange() {
+        return new FanoutExchange(exchangeDlxName);
+    }
+
+    @Bean
     public Queue notificacaoQueue() {
-        return new Queue(queueName);
+
+        Map<String, Object> argumentos = new HashMap<>();
+        argumentos.put("x-dead-letter-exchange", exchangeDlxName);
+
+        return new Queue(queueName, true, false, false , argumentos);
+    }
+
+    @Bean
+    public Queue notificacaoDlqQueue() {
+        return new Queue(queueDlqName);
     }
 
     @Bean
     public Binding binding() {
-        return BindingBuilder.bind(notificacaoQueue()).to(pedidoExchange());
+        return BindingBuilder.bind(notificacaoQueue()).to(notificacaoExchange());
+    }
+
+    @Bean
+    public Binding bindingDlq() {
+        return BindingBuilder.bind(notificacaoDlqQueue()).to(pedidoDlxExchange());
     }
 
     @Bean
